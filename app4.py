@@ -15,6 +15,7 @@ from langchain.schema import Document
 from langchain.chains.summarize import load_summarize_chain
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import PromptTemplate
+import xml.etree.ElementTree as ET
 
 load_dotenv()
 
@@ -104,20 +105,13 @@ class EnhancedWebScraper:
         return structured_data
     
     def get_priority_pages(self, base_url: str) -> List[str]:
+        print('base_url >>>>>>>>>>>>>>>>>>>>>>> '+ base_url)
         """Get priority pages that are most likely to contain company info"""
-        priority_paths = [
-            '', '/', '/about', '/about-us', '/company', '/contact', 
-            '/team', '/leadership', '/careers', '/services', '/products'
-        ]
-        
-        pages = []
-        for path in priority_paths:
-            if path == '' or path == '/':
-                pages.append(base_url)
-            else:
-                pages.append(urljoin(base_url, path))
-        
-        return pages
+        r = requests.get(base_url, timeout=5)
+        print('r >>>>>>>>>>>>>>>>> ' + r)
+        root = ET.fromstring(r.content)
+        print('root >>>>>>>>>>>>>>>>> ' + root)
+        return [elem.text for elem in root.findall('.//{*}loc')]
 
     
     def scrape_page(self, url: str) -> Optional[Dict]:
@@ -157,7 +151,7 @@ class EnhancedWebScraper:
         """Crawl company website focusing on priority pages and additional discovered pages"""
         base_domain = self.get_domain(base_url)
         priority_pages = self.get_priority_pages(base_domain)
-        
+        print('priority_pages >>>>>>>>>>>>>>>>>>> ', priority_pages)
         scraped_data = []
         visited = set()
         to_visit = set(priority_pages)
@@ -311,7 +305,7 @@ def main():
     
     # Sidebar configuration
     st.sidebar.header("Configuration")
-    max_pages = st.sidebar.slider("Max pages to crawl", 1, 10, 5)
+    max_pages = st.sidebar.slider("Max pages to crawl", 1, 100, 50)
     
     # Main input
     url = st.text_input("Enter Company Website URL", placeholder="https://example.com")
@@ -334,44 +328,7 @@ def main():
                 progress_bar.progress(25)
                 scraped_data = scraper.crawl_company_site(url, max_pages)
                 
-                if not scraped_data:
-                    st.error("Failed to extract content from the website")
-                    return
-                
-                # Step 2: Create summary
-                status_text.text("Creating company summary...")
-                progress_bar.progress(50)
-                company_summary = scraper.create_company_summary(scraped_data)
-                
-                # Step 3: Extract structured info
-                status_text.text("Extracting structured information...")
-                progress_bar.progress(75)
-                company_info = scraper.extract_company_info(company_summary, url)
-                
-                progress_bar.progress(100)
-                status_text.text("✅ Enrichment complete!")
-                
-                # Display results
-                st.success("Company enrichment completed successfully!")
-                
-                # Show the extracted JSON
-                st.subheader("📋 Extracted Company Information")
-                st.code(company_info, language="json")
-                
-                # Show additional insights
-                with st.expander("🔍 Additional Insights"):
-                    st.write("**Company Summary:**")
-                    st.write(company_summary['summary'])
-                    
-                    if company_summary['social_links']:
-                        st.write("**Social Media Presence:**")
-                        for platform, link in company_summary['social_links'].items():
-                            st.write(f"- {platform.title()}: {link}")
-                    
-                    st.write(f"**Pages Analyzed:** {len(scraped_data)}")
-                    for i, data in enumerate(scraped_data, 1):
-                        st.write(f"{i}. {data['url']}")
-                
+               
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
                 st.error("Please check your API key and try again.")
